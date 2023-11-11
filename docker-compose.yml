@@ -1,0 +1,123 @@
+# Docker Compose version
+# https://docs.docker.com/compose/compose-file/compose-file-v3/
+version: "3.8"
+
+# Start of services
+services:
+  # Define the nginx service
+  nginx:
+    container_name: nginx_container
+    build:
+      # Use current directory as build context
+      context: .
+      # Specify nginx Dockerfile location
+      dockerfile: nginx/Dockerfile
+    # Expose port for nginx (change if needed)
+    expose:
+      - ${NGINX_PORT}
+    # Map port externally to 80 internally for nginx (change if needed)
+    ports:
+      - ${NGINX_PORT}:80
+    # Connect to the network
+    networks:
+      db:
+      app_net:
+          ipv4_address: ${NETWORK_NGINX}
+    volumes:
+      # Mount the app directory into the nginx container
+      - ./app/:/var/www/html/
+      # Mount nginx logs
+      - ./logs/nginx:/var/log/nginx/
+    depends_on:
+      - php
+      - mariadb
+
+  # Define the php service
+  php:
+    container_name: php_container
+    build:
+      # Use current directory as build context
+      context: .
+      # Specify php Dockerfile location
+      dockerfile: php/Dockerfile
+    # Connect to the network
+    networks:
+      db:
+      app_net:
+          ipv4_address: ${NETWORK_PHP}
+    volumes:
+      # Mount the app directory into the php container
+      - ./app/:/var/www/html/
+      # Mount php logs
+      - ./logs/php.log:/var/log/fpm-php.www.log
+    depends_on:
+      - mariadb
+
+  # Define the mariadb service
+  mariadb:
+    container_name: mariadb_container
+    # Use official mariadb image from Docker Hub
+    image: mariadb
+    restart: always
+    # Set environment variables for mariadb
+    environment:
+      # Set the db root password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER:  user
+      MYSQL_PASSWORD: user
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_TCP_PORT: ${MYSQL_PORT}
+    expose:
+      # Expose port for mariadb
+      - ${MYSQL_PORT}
+    ports:
+      # Map port externally to 3306 internally for mariadb
+      - ${MYSQL_PORT}:3306
+    networks:
+      db:
+      app_net:
+          ipv4_address: ${NETWORK_MARIADB}
+    volumes:
+      # Use named volume "mariadb" for mariadb data
+      - mariadb:/var/lib/mysql
+
+  # Define the phpmyadmin service
+  phpmyadmin:
+    container_name: phpmyadmin_container
+    # Use official phpmyadmin image from Docker Hub
+    image: phpmyadmin
+    restart: always
+    # Expose port for phpmyadmin (change if needed)
+    expose:
+      - ${PHPMYADMIN_PORT}
+    # Map port externally to 80 internally for phpmyadmin (change if needed)
+    ports:
+      - ${PHPMYADMIN_PORT}:80
+    # Connect to the network
+    networks:
+      db:
+      app_net:
+          ipv4_address: ${NETWORK_PHPMYADMIN}
+    # Set environment variables for phpMyAdmin
+    environment:
+      # Disable arbitrary server connection; use the configured host and port
+      - PMA_ARBITRARY=0
+      # Set the host for phpMyAdmin to connect to
+      - PMA_HOST=${PMA_HOST}
+      # Set the port for phpMyAdmin to connect to
+      - PMA_PORT=${MYSQL_PORT}
+    depends_on:
+      - mariadb
+
+# Define the network for communication between containers
+networks:
+  app_net:
+    ipam:
+      config:
+        - subnet: ${SUBNET}
+  db:
+    driver: bridge
+
+# Define a local volume for mariadb data
+volumes:
+  mariadb:
